@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn import metrics
+
 from sklearn import cluster, datasets, mixture, metrics
 from sklearn.cluster import KMeans
 from sklearn.neighbors import kneighbors_graph
@@ -106,13 +108,15 @@ datasets = [
         },
     ),
     (blobs, {"min_samples": 7, "xi": 0.1, "min_cluster_size": 0.2}),
-    (no_structure, {}),
+    # (no_structure, {}),
 ]
 
 
 # ========================
 # Calculate clusters with all algorithms for all datasets
 # ========================
+metrics_values = np.zeros((5,9,4)) 
+
 for i_dataset, (dataset, algo_params) in enumerate(datasets):
     # update parameters with dataset-specific values
     params = default_base.copy()
@@ -132,6 +136,10 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
 
     # -------------- K-Means -------------
     kmeans = KMeans(n_clusters=params["n_clusters"], random_state=0)
+    kmeans3 = KMeans(n_clusters=3, random_state=0)
+    kmeans2 = KMeans(n_clusters=2, random_state=0)
+    kmeans4 = KMeans(n_clusters=4, random_state=0)
+    kmeans6 = KMeans(n_clusters=6, random_state=0)
     kmedoids = KMedoids(n_clusters=params["n_clusters"], random_state=0)
     # two_means = cluster.MiniBatchKMeans(n_clusters=params["n_clusters"])
 
@@ -297,6 +305,10 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
 
     clustering_algorithms = (
         ("KMeans", kmeans),
+        # ("KMeans K = 2", kmeans2),
+        # ("KMeans K = 3", kmeans3),
+        # ("KMeans K = 4", kmeans4),
+        # ("KMeans K = 6", kmeans6),
         ("kmedoids", kmedoids),
         ("GMM", gmm),
         ("Single", single_linkage),
@@ -306,8 +318,11 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
         ("OPTICS", optics),
         ("Mean-Shift", ms),
     )
-
+    
+    algorith_index = 0
     for name, algorithm in clustering_algorithms:
+        algorith_index += 1
+
         t0 = time.time()
 
         # catch warnings related to kneighbors_graph
@@ -327,13 +342,34 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
             )
             algorithm.fit(X)
 
-
         t1 = time.time()
 
         if hasattr(algorithm, "labels_"):
             y_pred = algorithm.labels_.astype(int)
         else:
             y_pred = algorithm.predict(X)
+
+
+        DB_Index = metrics.davies_bouldin_score(X, y_pred)
+        Silhoulette = metrics.silhouette_score(X, y_pred, metric='euclidean')
+        Rand_Index = metrics.rand_score(y, y_pred)
+        NMI = metrics.normalized_mutual_info_score(y, y_pred)
+        np. set_printoptions(suppress=True)
+
+        metrics_values[i_dataset, algorith_index - 1, 0] = np.round(DB_Index,3)
+        metrics_values[i_dataset, algorith_index - 1, 1] = np.round(Silhoulette,3)
+        metrics_values[i_dataset, algorith_index - 1, 2] = np.round(Rand_Index,3)
+        metrics_values[i_dataset, algorith_index - 1, 3] = np.round(NMI,3)
+
+        print("Name: ", name)
+        print("Dataset: ", i_dataset)
+        # print("inertia: ", algorithm.inertia_)
+        print("Davies-Bouldin Index: ", DB_Index)
+        print("Silhouette Index: ", Silhoulette)
+        print("Rand Index: ", Rand_Index)
+        print("Normalized Mutual Information: ", NMI)
+
+
 
         plt.subplot(len(datasets), len(clustering_algorithms), plot_num)
         if i_dataset == 0:
@@ -363,6 +399,9 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
         colors = np.append(colors, ["#000000"])
         plt.scatter(X[:, 0], X[:, 1], s=10, color=colors[y_pred])
 
+        # print both internal metrics inside plot
+        bothInternal = str(metrics_values[i_dataset, algorith_index - 1, 1]) + "\n" + str(metrics_values[i_dataset, algorith_index - 1, 0])
+
         plt.xlim(-2.5, 2.5)
         plt.ylim(-2.5, 2.5)
         plt.xticks(())
@@ -370,6 +409,7 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
         plt.text(
             0.99,
             0.01,
+            # bothInternal,
             ("%.2fs" % (t1 - t0)).lstrip("0"),
             transform=plt.gca().transAxes,
             size=15,
@@ -377,4 +417,11 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets):
         )
         plot_num += 1
 
+for i_dataset, _ in enumerate(datasets):
+    df = pd.DataFrame (metrics_values[i_dataset,:,:])
+    filepath = 'dataset' + str(i_dataset) + '.xlsx'
+    df.to_excel(filepath, index=False)
+
+
+print(metrics_values)
 plt.show()
